@@ -1,6 +1,7 @@
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum, auto
+from datetime import date, time
 
 file_path = Path("test/time_tracking.md")
 
@@ -16,8 +17,19 @@ def main():
         tokens = line_tokenize(line)
         token_lines.append(tokens)
 
-    for line_num, tl in enumerate(token_lines, 1):
-        print(line_num, " ".join(str(token) for token in tl))
+    # Debug print tokens.
+    # for line_num, tl in enumerate(token_lines, 1):
+    #     print(line_num, " ".join(str(token) for token in tl))
+
+    line_entries: list[LineEntry] = []
+    for l in token_lines:
+        entry = line_parse(l)
+        line_entries.append(entry)
+        print(entry)
+
+# ============================================================================
+# Tokenizer
+# ============================================================================
 
 @dataclass
 class Line:
@@ -159,6 +171,138 @@ def extract_time(raw:str) -> str | None:
         return None
 
     return raw[:len(time_format)]
+
+# ============================================================================
+# Line parser
+# ============================================================================
+
+class LineParser:
+    def __init__(self, tokens: list[Token]):
+        self.tokens = tokens
+        self.cursor = 0
+
+    def peek(self, offset: int = 0) -> Token | None:
+        index = self.cursor + offset
+        if index >= len(self.tokens):
+            return None
+        return self.tokens[index]
+
+    def consume(self, expected: TokenType) -> Token:
+        token = self.peek()
+
+        if token is None or token.type != expected:
+            raise ValueError(f"Expected: {expected}")
+
+        self.cursor += 1
+        return token
+
+class LineType(Enum):
+    PROJECT = auto()
+    TASK = auto()
+    TIME = auto()
+
+@dataclass
+class ProjectEntry:
+    date: date
+    name: str
+
+@dataclass
+class TaskEntry:
+    description: str
+
+@dataclass
+class TimeEntry:
+    start: time
+    end: time
+
+@dataclass
+class LineEntry:
+    type: LineType
+    entry: ProjectEntry | TaskEntry | TimeEntry
+
+    def __str__(self):
+        return self.type.name
+
+def line_parse(tokens: list[Token]) -> LineEntry:
+    p = LineParser(tokens)
+
+    stack: list[Token] = []
+    stack_append_peek(stack, p)
+
+    if stack[-1].type == TokenType.CHECKBOX:
+        return parse_project(p)
+
+    if stack[-1].type == TokenType.INDENT:
+        stack_append_peek(stack, p)
+        if stack[-1].type == TokenType.BULLET:
+            stack_append_peek(stack, p)
+            if stack[-1].type == TokenType.TEXT:
+                return parse_task(p)
+            if stack[-1].type == TokenType.TIME:
+                return parse_time(p)
+
+def stack_append_peek(stack: list[Token], p: LineParser):
+    stack.append(p.peek(len(stack)))
+
+def parse_project(p: LineParser) -> LineEntry:
+    p.consume(TokenType.CHECKBOX)
+    date_token = p.consume(TokenType.DATE)
+    p.consume(TokenType.COLON)
+    name_token = p.consume(TokenType.TEXT)
+
+    date_data = date(*date_str_to_yyyy_mm_dd(date_token.content))
+    name_date = name_token.content
+    return LineEntry(LineType.PROJECT, ProjectEntry(date_data, name_date))
+
+def parse_task(p: LineParser) -> LineEntry:
+    p.consume(TokenType.INDENT)
+    p.consume(TokenType.BULLET)
+    text_token = p.consume(TokenType.TEXT)
+
+    text_data = text_token.content
+    return LineEntry(LineType.TASK, TaskEntry(text_data))
+
+def parse_time(p: LineParser) -> LineEntry:
+    p.consume(TokenType.INDENT)
+    p.consume(TokenType.BULLET)
+    start_time_token = p.consume(TokenType.TIME)
+    p.consume(TokenType.HYPHEN)
+    end_time_token = p.consume(TokenType.TIME)
+
+    start_data = time(*time_str_to_hh_mm(start_time_token.content))
+    end_data = time(*time_str_to_hh_mm(end_time_token.content))
+    return LineEntry(LineType.TIME, TimeEntry(start_data, end_data))
+
+# ============================================================================
+# Utils
+# ============================================================================
+
+def date_str_to_yyyy_mm_dd(s: str) -> tuple[int, int, int]:
+    date_format: str = "YYYY-MM-DD"
+
+    if len(s) != len(date_format):
+        return None
+
+    year: str = s[:4]
+    month: str = s[5:7]
+    day: str = s[8:10]
+
+    return (int(year), int(month), int(day))
+
+def time_str_to_hh_mm(s: str) -> tuple[int, int]:
+    time_format: str = "HH:mm"
+
+    if len(s) != len(time_format):
+        return None
+
+    hour: str = s[:2]
+    minute: str = s[3:]
+
+    return (int(hour), int(minute))
+
+# ============================================================================
+# Entry point
+# ============================================================================
 
 if __name__ == "__main__":
     main()

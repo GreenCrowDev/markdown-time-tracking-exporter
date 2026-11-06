@@ -1,5 +1,5 @@
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from datetime import date, time
 
@@ -22,10 +22,21 @@ def main():
     #     print(line_num, " ".join(str(token) for token in tl))
 
     line_entries: list[LineEntry] = []
+    line_entries.append(LineEntry(LineType.ROOT))
     for l in token_lines:
         entry = line_parse(l)
         line_entries.append(entry)
-        print(entry)
+        # print(entry)
+
+    ir = parse_document(line_entries)
+
+    # Debug print ir.
+    for p in ir.projects:
+        print(p)
+        for t in p.tasks:
+            print(t)
+            for i in t.intervals:
+                print(i)
 
 # ============================================================================
 # Tokenizer
@@ -197,6 +208,7 @@ class LineParser:
         return token
 
 class LineType(Enum):
+    ROOT = auto()
     PROJECT = auto()
     TASK = auto()
     TIME = auto()
@@ -218,7 +230,7 @@ class TimeEntry:
 @dataclass
 class LineEntry:
     type: LineType
-    entry: ProjectEntry | TaskEntry | TimeEntry
+    entry: ProjectEntry | TaskEntry | TimeEntry | None = None
 
     def __str__(self):
         return self.type.name
@@ -272,6 +284,99 @@ def parse_time(p: LineParser) -> LineEntry:
     start_data = time(*time_str_to_hh_mm(start_time_token.content))
     end_data = time(*time_str_to_hh_mm(end_time_token.content))
     return LineEntry(LineType.TIME, TimeEntry(start_data, end_data))
+
+# ============================================================================
+# Document parser
+# ============================================================================
+
+class DocumentParser:
+    def __init__(self, entries: list[LineEntry]):
+        self.entries = entries
+        self.cursor = 0
+
+    def peek(self, offset: int = 0) -> LineEntry | None:
+        index = self.cursor + offset
+        if index >= len(self.entries):
+            return None
+        return self.entries[index]
+
+    def consume(self, expected: LineType) -> LineEntry:
+        token = self.peek()
+
+        if token is None:
+            raise ValueError("Token is None")
+
+        if token.type != expected:
+            raise ValueError(f"Expected: {expected}; Found {token.type}")
+
+        self.cursor += 1
+        return token
+
+@dataclass
+class IRTime:
+    entry: TimeEntry
+
+    def __str__(self):
+        return str(self.entry.start) + "-" + str(self.entry.end)
+
+@dataclass
+class IRTask:
+    entry: TaskEntry | None = None
+    intervals: list[IRTime] = field(default_factory=list)
+
+    def __str__(self):
+        if self.entry is None:
+            return "None"
+        return self.entry.description
+
+@dataclass
+class IRProject:
+    entry: ProjectEntry
+    tasks: list[IRTask] = field(default_factory=list)
+
+    def __str__(self):
+        return str(self.entry.date) + " " + self.entry.name
+
+@dataclass
+class IntermediateRepresentation:
+    projects: list[IRProject] = field(default_factory=list)
+
+def parse_document(entries: list[LineEntry]) -> IntermediateRepresentation:
+    ir = IntermediateRepresentation()
+    # Start from index 1 since the first item is the root.
+    p = DocumentParser(entries)
+    p.cursor = 1
+    for i in range(1, len(entries)):
+        prev = entries[i-1]
+        match prev.type:
+            case LineType.ROOT:
+                e = p.consume(LineType.PROJECT)
+                ir.projects.append(IRProject(e.entry))
+            case LineType.PROJECT:
+                match p.peek().type:
+                    case LineType.TASK:
+                        e = p.consume(LineType.TASK)
+                        ir.projects[-1].tasks.append(IRTask(e.entry))
+                    case LineType.TIME:
+                        e = p.consume(LineType.TIME)
+                        ir.projects[-1].tasks.append(IRTask())
+                        ir.projects[-1].tasks[-1].intervals.append(IRTime(e.entry))
+            case LineType.TASK:
+                e = p.consume(LineType.TIME)
+                ir.projects[-1].tasks[-1].intervals.append(IRTime(e.entry))
+            case LineType.TIME:
+                match p.peek().type:
+                    case LineType.PROJECT:
+                        e = p.consume(LineType.PROJECT)
+                        ir.projects.append(IRProject(e.entry))
+                    case LineType.TASK:
+                        e = p.consume(LineType.TASK)
+                        ir.projects[-1].tasks.append(IRTask(e.entry))
+                    case LineType.TIME:
+                        e = p.consume(LineType.TIME)
+                        ir.projects[-1].tasks[-1].intervals.append(IRTime(e.entry))
+
+    return ir
 
 # ============================================================================
 # Utils

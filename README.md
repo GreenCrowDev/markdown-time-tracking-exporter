@@ -4,6 +4,17 @@ Converts a Markdown file using a simple time-tracking syntax into an Excel sprea
 
 The generated spreadsheet is fully inspectable, with formulas to calculate time intervals and total hours automatically.
 
+## Syntax
+
+```markdown
+- [ ] 2026-01-01: [[Feature - PR 1]]
+    - 09:00-10:00
+    - 12:00-13:00 # Comment: Second time entry
+- [ ] 2026-01-02: [[Feature - PR 2]]
+    - Task description # Nested task entry
+        - 20:15-22:00
+```
+
 ## Usage
 
 By default, the script uses the Markdown file at `test/time_tracking.md`.

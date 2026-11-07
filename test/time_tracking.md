@@ -5,9 +5,9 @@
     - 12:00-13:00 # Second time entry
 - [ ] 2026-01-02: [[Feature - PR 2]]
     - 23:35-00:00 # Midnight
-- [ ] 2026-11-02: [[Feature - PR 3]]
+- [ ] 2026-01-03: [[Feature - PR 3]]
     - Task description # Nested task entry
         - 20:15-22:00
-- [ ] 2026-10-28: [[Feature - PR 4]]
+- [ ] 2026-01-04: [[Feature - PR 4]]
     - [Task with link](https://github.com/)
         - 20:00-20:20

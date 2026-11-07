@@ -2,6 +2,9 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from datetime import date, time
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from collections.abc import Iterator
 
 file_path = Path("test/time_tracking.md")
 
@@ -31,12 +34,14 @@ def main():
     ir = parse_document(line_entries)
 
     # Debug print ir.
-    for p in ir.projects:
-        print(p)
-        for t in p.tasks:
-            print(t)
-            for i in t.intervals:
-                print(i)
+    # for p in ir.projects:
+    #     print(p)
+    #     for t in p.tasks:
+    #         print(t)
+    #         for i in t.intervals:
+    #             print(i)
+
+    spreadsheet_create(ir)
 
 # ============================================================================
 # Tokenizer
@@ -377,6 +382,61 @@ def parse_document(entries: list[LineEntry]) -> IntermediateRepresentation:
                         ir.projects[-1].tasks[-1].intervals.append(IRTime(e.entry))
 
     return ir
+
+# ============================================================================
+# Spreadsheet
+# ============================================================================
+
+def spreadsheet_create(ir: IntermediateRepresentation):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Time Tracking"
+
+    headers = ["Date", "Project", "Task", "Start", "End", "Duration", "Hours"]
+    ws.append(headers)
+
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 40
+    ws.column_dimensions["C"].width = 60
+    ws.column_dimensions["D"].width = 10
+    ws.column_dimensions["E"].width = 10
+    ws.column_dimensions["F"].width = 10
+    ws.column_dimensions["G"].width = 10
+
+    for row in spreadsheed_rows(ir):
+        ws.append([
+            *row,
+            f"=MOD(E{ws.max_row + 1}-D{ws.max_row + 1},1)",
+            f"=F{ws.max_row + 1}*24"
+        ])
+
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    for row in range(2, ws.max_row + 1):
+        ws[f"D{row}"].number_format = "hh:mm"
+        ws[f"E{row}"].number_format = "hh:mm"
+        ws[f"F{row}"].number_format = "[h]:mm"
+        ws[f"G{row}"].number_format = "0.00"
+
+    total_row = ws.max_row + 1
+    ws[f"F{total_row}"] = f"=SUM(F2:F{total_row - 1})"
+    ws[f"G{total_row}"] = f"=SUM(G2:G{total_row - 1})"
+    ws[f"F{total_row}"].number_format = "[h]:mm"
+
+    wb.save("time_tracking.xlsx")
+
+def spreadsheed_rows(ir: IntermediateRepresentation) -> Iterator[list]:
+    for p in ir.projects:
+        for t in p.tasks:
+            for i in t.intervals:
+                yield [
+                    p.entry.date,
+                    p.entry.name,
+                    t.entry.description if t.entry is not None else "",
+                    i.entry.start,
+                    i.entry.end,
+                ]
 
 # ============================================================================
 # Utils

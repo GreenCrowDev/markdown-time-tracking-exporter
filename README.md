@@ -4,6 +4,15 @@ Converts a Markdown file using a simple time-tracking syntax into an Excel sprea
 
 The generated spreadsheet is fully inspectable, with formulas to calculate time intervals and total hours automatically.
 
+## Usage
+
+By default, the script uses the Markdown file at `test/time_tracking.md`.
+To provide custom Markdown content, you can pass it directly through the command line:
+
+```bat
+py main.py --text "markdown_content"
+```
+
 ## Python
 
 This project uses Python and a virtual environment (`venv`).

@@ -5,12 +5,20 @@ from datetime import date, time
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from collections.abc import Iterator
+import argparse
 
 file_path = Path("test/time_tracking.md")
 
 def main():
-    # Read the whole file.
-    content = file_path.read_text(encoding="utf-8")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--text", type=str, help="Markdown content")
+    args = parser.parse_args()
+
+    if args.text:
+        content = args.text
+    else:
+        # Read the whole file.
+        content = file_path.read_text(encoding="utf-8")
 
     # Tokenize line by line.
     token_lines: list[list[Token]] = []
